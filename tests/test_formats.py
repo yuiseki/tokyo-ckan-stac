@@ -33,3 +33,8 @@ def test_without_a_known_extension_the_label_decides():
 def test_nothing_known_means_no_type_rather_than_a_guess():
     assert media_type("", "https://x/download") is None
     assert media_type("DXF", "https://x/a") is None
+
+
+def test_shape_and_shp_are_one_format():
+    assert format_label("Shape", "https://x/a.zip") == "SHP"
+    assert format_label("SHP", "https://x/a.zip") == "SHP"

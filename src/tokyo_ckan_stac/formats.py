@@ -38,7 +38,7 @@ _TYPES = {
     "ODS": "application/vnd.oasis.opendocument.spreadsheet",
 }
 
-_ALIASES = {"XISX": "XLSX", "JPG": "JPEG", "HTM": "HTML", "TIF": "TIFF"}
+_ALIASES = {"XISX": "XLSX", "JPG": "JPEG", "HTM": "HTML", "TIF": "TIFF", "SHAPE": "SHP"}
 
 
 def _extension(url: str):
