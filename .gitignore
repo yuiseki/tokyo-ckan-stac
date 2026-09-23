@@ -1,0 +1,16 @@
+# Harvested from the CKAN API. `make packages` rebuilds it in under a minute
+# and a stale copy in git is worse than none. data/datastore.jsonl takes hours
+# to rebuild but changes whenever the catalog does, so it is not tracked
+# either. data/footprints.json is tracked: it is small and changes only when
+# N03 does.
+data/packages.jsonl
+data/datastore.jsonl
+data/head.jsonl
+*.tmp
+
+# The catalog is a build artifact; `make build` rebuilds it from data/.
+catalog/
+
+__pycache__/
+.venv/
+tmp/
