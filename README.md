@@ -40,6 +40,23 @@ select organization_title, item_title, title, href
  where list_contains(columns, '緯度');
 ```
 
+Which shared datasets actually converge on one set of columns:
+
+```sql
+select family, standard_dataset_no, organizations, headers_checked,
+       dominant_layout_share, unique_layouts
+  from read_csv('https://stac.yuiseki.net/tokyo-ckan/families/summary.csv')
+ order by dominant_layout_share desc;
+```
+
+A family is a dataset name that five or more publishers use. For each, the
+first header row of every member's CSV was read.
+`dominant_layout_share` is the fraction of the members whose header could be
+read that match the most common header exactly; members that could not be
+read are left out of both sides. dominant_layout_share measures observed
+header convergence within a family, not compliance with an external standard
+or semantic equivalence.
+
 ## What maps to what
 
 | CKAN | STAC |

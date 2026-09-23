@@ -58,7 +58,12 @@ def root_docs(stats: Dict, base: str) -> Tuple[str, str]:
 - [形式別](formats/catalog.json): CSV, XLSX, PDF, GeoJSON ...
 - [共通項目別](families/catalog.json): 同じ名前のデータセットを {stats['min_orgs']} 以上の組織が公開しているもの
   {stats['families']} 種類 ({stats['family_datasets']:,} 件)。うち {stats['national_families']} 種類はデジタル庁の
-  自治体標準オープンデータセット。区市町村を比べるならここから
+  自治体標準オープンデータセット。区市町村を比べるならここから。
+  [families/summary.csv](families/summary.csv) に家族ごとの列構成の収束度を 1 枚の表で置いています。
+  `dominant_layout_share` は、見出し行を読めた兄弟データセットのうち最も多い列構成と完全一致した割合です
+  (分母は `headers_checked`、読めなかったものは除外)。
+  dominant_layout_share measures observed header convergence within a family, not compliance
+  with an external standard or semantic equivalence.
 - [items.parquet](items.parquet): 全データセットを 1 行ずつ (GeoParquet)
 - [assets.parquet](assets.parquet): 全ファイルを 1 行ずつ
 
@@ -137,9 +142,24 @@ carry a prefix (投票所_全国地方公共団体コード). A false here often
 older or newer layout of the same thing", not "a different thing": compare
 the headers before discarding a member.
 
-`{base}/families/index.json` has, per family, how many headers were read and
-how many match. Read it before comparing: a family where half the members
-differ cannot be compared by counting rows.
+`{base}/families/summary.csv` (and `families/index.json`, the same with the
+dominant layout's column names) has one row per family:
+
+| column | meaning |
+|---|---|
+| headers_checked | members whose first CSV header was read |
+| headers_unread | members with no CSV, a dead link, or a zip named .csv |
+| dominant_layout_count | members whose header equals the most common one exactly |
+| dominant_layout_share | dominant_layout_count / headers_checked; unread members are in neither |
+| unique_layouts | how many distinct headers the checked members use |
+| standard_dataset_no | the national definition-book number, if any |
+
+dominant_layout_share measures observed header convergence within a family,
+not compliance with an external standard or semantic equivalence. A share of
+1.00 means every readable member has the same column names; it does not say
+those columns mean the same thing, or that they follow the definition book.
+Read it before comparing: a family with a low share, or many unique layouts,
+cannot be compared by concatenating files.
 
 ```sql
 select organization_title, title, family_layout_match, ckan_url

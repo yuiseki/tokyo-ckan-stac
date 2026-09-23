@@ -39,3 +39,12 @@ def test_family_counts_reach_the_docs():
     readme, agents = root_docs(s, "https://x.test")
     assert "43 種類 (1,093 件)" in readme
     assert "21 of them are" in agents
+
+
+def test_the_share_is_described_as_convergence_not_compliance():
+    s = _stats()
+    readme, agents = root_docs(s, "https://x.test")
+    sentence = ("dominant_layout_share measures observed header convergence within a family")
+    assert sentence in " ".join(readme.split())
+    assert sentence in " ".join(agents.split())
+    assert "not compliance" in " ".join(agents.split())

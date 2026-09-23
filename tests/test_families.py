@@ -52,7 +52,11 @@ def test_layout_summary_finds_the_odd_one_out():
         {"family": "F", "dataset": "d", "error": "HTTPError 404"},
     ]
     s = layout_summary(rows)["F"]
-    assert s["checked"] == 3 and s["matching"] == 2 and s["unchecked"] == 1
+    assert s["headers_checked"] == 3 and s["dominant_layout_count"] == 2
+    assert s["headers_unread"] == 1
+    # the unread member is in neither the numerator nor the denominator
+    assert s["dominant_layout_share"] == round(2 / 3, 4)
+    assert s["unique_layouts"] == 2
     assert s["match"] == {"a": True, "b": True, "c": False}
     assert "d" not in s["match"]
 
@@ -74,3 +78,26 @@ def test_decode_head_reads_what_the_catalog_actually_serves():
 def test_split_header_skips_blank_lines():
     from tokyo_ckan_stac.families import split_header
     assert split_header("\n,,\n名称,住所\n") == ["名称", "住所"]
+
+
+def test_a_family_with_no_readable_header_has_no_share():
+    from tokyo_ckan_stac.families import layout_summary
+    s = layout_summary([{"family": "G", "dataset": "x", "error": "no CSV resource"}])["G"]
+    assert s["headers_checked"] == 0 and s["dominant_layout_share"] is None
+
+
+def test_summary_csv_round_trips():
+    import csv
+    import io
+    from tokyo_ckan_stac.families import SUMMARY_COLUMNS, summary_csv
+    text = summary_csv([{"family": "公共施設一覧", "slug": "ods-01", "standard_dataset_no": "01",
+                         "organizations": 31, "datasets": 32, "headers_checked": 27,
+                         "headers_unread": 5, "dominant_layout_count": 17,
+                         "dominant_layout_share": 0.6296, "unique_layouts": 8,
+                         "href": "./ods-01/catalog.json"},
+                        {"family": "スポーツ施設一覧", "standard_dataset_no": None}])
+    assert text.startswith("\ufeff")
+    rows = list(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
+    assert list(rows[0]) == SUMMARY_COLUMNS
+    assert rows[0]["unique_layouts"] == "8"
+    assert rows[1]["standard_dataset_no"] == ""

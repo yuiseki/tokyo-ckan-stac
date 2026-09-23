@@ -104,11 +104,16 @@ def layout_summary(headers: Iterable[Dict]) -> Dict[str, Dict]:
         members = fps.get(fam, {})
         counts = Counter(members.values())
         dominant, n = counts.most_common(1)[0] if counts else ("", 0)
+        checked = len(members)
         out[fam] = {
             "dominant_layout": dominant.split("\t") if dominant else [],
-            "checked": len(members),
-            "matching": n,
-            "unchecked": unchecked.get(fam, 0),
+            # Observed header convergence among the members whose header was
+            # read. Not compliance with a standard, not semantic equivalence.
+            "headers_checked": checked,
+            "headers_unread": unchecked.get(fam, 0),
+            "dominant_layout_count": n,
+            "dominant_layout_share": round(n / checked, 4) if checked else None,
+            "unique_layouts": len(counts),
             "match": {d: fp == dominant for d, fp in members.items()},
         }
     return out
@@ -146,3 +151,26 @@ def split_header(text: str):
         delim = "\t" if line.count("\t") > line.count(",") else ","
         return next(csv.reader(io.StringIO(line), delimiter=delim))
     raise ValueError("no non-empty row in the first 8 KiB")
+
+
+SUMMARY_COLUMNS = [
+    "family", "slug", "standard_dataset_no", "organizations", "datasets",
+    "headers_checked", "headers_unread", "dominant_layout_count",
+    "dominant_layout_share", "unique_layouts", "href",
+]
+
+
+def summary_csv(index: Iterable[Dict]) -> str:
+    """families/index.json as one CSV, for people, DuckDB and agents alike.
+
+    UTF-8 with a BOM, so Excel in a Japanese locale opens it as UTF-8;
+    DuckDB and Python's csv module skip the BOM.
+    """
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=SUMMARY_COLUMNS, lineterminator="\n")
+    w.writeheader()
+    for r in index:
+        w.writerow({k: ("" if r.get(k) is None else r.get(k)) for k in SUMMARY_COLUMNS})
+    return "\ufeff" + buf.getvalue()

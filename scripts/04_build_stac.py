@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from tokyo_ckan_stac.docs import node_docs, root_docs  # noqa: E402
 from tokyo_ckan_stac.families import (  # noqa: E402
-    families, family_name, layout_summary, national_number, slug as family_slug)
+    families, family_name, layout_summary, national_number, slug as family_slug, summary_csv)
 from tokyo_ckan_stac.stac import (  # noqa: E402
     CKAN_SITE, build_catalog, build_collection, build_item)
 
@@ -93,7 +93,7 @@ def main() -> int:
     fam_of = {r["name"]: r["family"] for r in fam_rows if r["family"] in fams}
     layouts = layout_summary(load_headers())
     print(f"{len(fams)} families covering {len(fam_of)} datasets, "
-          f"{sum(v['checked'] for v in layouts.values())} headers read")
+          f"{sum(v['headers_checked'] for v in layouts.values())} headers read")
 
     by_org = collections.defaultdict(list)
     orgs = {}
@@ -192,7 +192,10 @@ def main() -> int:
         what = (f"デジタル庁 自治体標準オープンデータセット {nat}。" if nat else
                 "国の標準には無い名前。都内の多くの組織が同じ名前で公開している。")
         if lay:
-            what += f" 列を確認できた {lay['checked']} 件のうち {lay['matching']} 件が同じ列構成。"
+            if lay["headers_checked"]:
+                what += (f" 見出し行を読めた {lay['headers_checked']} 件のうち {lay['dominant_layout_count']} 件が"
+                         f"最も多い列構成と完全一致 (列構成は {lay['unique_layouts']} 通り)。"
+                         "これは列の収束度で、標準への準拠や意味の同一性ではない。")
         write_node(out / "families" / fs / "catalog.json", build_catalog(
             f"families-{fs}", fam, f"{len(fams[fam])} の組織が公開している「{fam}」。{what}",
             f"{base}/families/{fs}/catalog.json", "../../catalog.json", "../catalog.json",
@@ -202,10 +205,13 @@ def main() -> int:
              for i in its]), "../../")
         fam_children.append({"href": f"./{fs}/catalog.json", "title": f"{fam} ({len(fams[fam])})"})
         fam_index.append({
-            "family": fam, "slug": fs, "national_standard": nat,
-            "organisations": len(fams[fam]), "datasets": len(its),
-            "layout_checked": lay.get("checked", 0), "layout_matching": lay.get("matching", 0),
-            "layout_unchecked": lay.get("unchecked", 0),
+            "family": fam, "slug": fs, "standard_dataset_no": nat,
+            "organizations": len(fams[fam]), "datasets": len(its),
+            "headers_checked": lay.get("headers_checked", 0),
+            "headers_unread": lay.get("headers_unread", 0),
+            "dominant_layout_count": lay.get("dominant_layout_count", 0),
+            "dominant_layout_share": lay.get("dominant_layout_share"),
+            "unique_layouts": lay.get("unique_layouts", 0),
             "dominant_layout": lay.get("dominant_layout", []),
             "href": f"./{fs}/catalog.json",
         })
@@ -215,9 +221,13 @@ def main() -> int:
         "組織をまたいで比べるならここから。",
         f"{base}/families/catalog.json", "../catalog.json", "../catalog.json",
         "東京都オープンデータカタログ", fam_children,
-        extra_links=[{"rel": "alternate", "href": "./index.json", "type": "application/json",
-                      "title": "families/index.json: 列構成の一致を含む一覧"}]), "../")
+        extra_links=[
+            {"rel": "alternate", "href": "./index.json", "type": "application/json",
+             "title": "families/index.json: 列構成の収束度を含む一覧"},
+            {"rel": "alternate", "href": "./summary.csv", "type": "text/csv",
+             "title": "families/summary.csv: 同じ一覧を 1 枚の表に"}]), "../")
     write(out / "families" / "index.json", fam_index)
+    write(out / "families" / "summary.csv", summary_csv(fam_index))
 
     # collections/index.json: every Collection with its description, in one file.
     write(out / "collections" / "index.json", [
