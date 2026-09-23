@@ -35,6 +35,11 @@ def item_row(item: Dict, base_url: str) -> Dict:
         "formats": p["tokyo:formats"],
         "update_frequency": p["tokyo:update_frequency"],
         "update_frequency_class": p["tokyo:update_frequency_class"],
+        "family": p.get("tokyo:family"),
+        "family_size": p.get("tokyo:family_size"),
+        "national_standard": p.get("tokyo:national_standard"),
+        "standard_layout": p.get("tokyo:standard_layout"),
+        "family_layout_match": p.get("tokyo:family_layout_match"),
         "asset_count": len(item["assets"]),
         "datastore_count": sum(1 for a in assets if a.get("ckan:datastore_active")),
         "ckan_url": next(l["href"] for l in item["links"]

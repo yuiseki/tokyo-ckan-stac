@@ -56,6 +56,9 @@ def root_docs(stats: Dict, base: str) -> Tuple[str, str]:
 - [組織別](collections/catalog.json): {stats['organisations']} 組織。1 組織が 1 Collection
 - [分類別](categories/catalog.json): CKAN のグループ
 - [形式別](formats/catalog.json): CSV, XLSX, PDF, GeoJSON ...
+- [共通項目別](families/catalog.json): 同じ名前のデータセットを {stats['min_orgs']} 以上の組織が公開しているもの
+  {stats['families']} 種類 ({stats['family_datasets']:,} 件)。うち {stats['national_families']} 種類はデジタル庁の
+  自治体標準オープンデータセット。区市町村を比べるならここから
 - [items.parquet](items.parquet): 全データセットを 1 行ずつ (GeoParquet)
 - [assets.parquet](assets.parquet): 全ファイルを 1 行ずつ
 
@@ -108,6 +111,44 @@ select a.item_id, a.title, a.href
 
 Fetch with curl, requests or DuckDB. Cloudflare in front of this host has
 answered `Python-urllib` with 403 before; send a User-Agent of your own.
+
+## Comparing publishers: start from a family
+
+Questions like "which of 文京区, 台東区 and 千代田区 has the most libraries"
+need the same kind of list from each publisher. {stats['families']} names are used by
+{stats['min_orgs']} or more organisations; these are families, and each Item in one carries
+`tokyo:family`. {stats['national_families']} of them are デジタル庁's 自治体標準オープンデータセット
+(`tokyo:national_standard` is the number in its definition books, 01 公共施設一覧
+and so on). The others, such as スポーツ施設一覧 and 公立図書館情報, were
+registered across Tokyo in batches without a national definition.
+
+A shared name is a claim; the columns are the evidence. The first row of each
+member's first CSV was read, and:
+
+- `tokyo:family_layout_match` is true when the header equals the family's
+  most common one, false when it differs, null when it could not be read.
+- `tokyo:standard_layout` is true when the header starts with the national
+  layout (全国地方公共団体コード, ID, 地方公共団体名).
+
+`{base}/families/index.json` has, per family, how many headers were read and
+how many match. Read it before comparing: a family where half the members
+differ cannot be compared by counting rows.
+
+```sql
+select organization_title, title, family_layout_match, ckan_url
+  from '{base}/items.parquet'
+ where family = '公立図書館情報'
+   and collection in ('t131016', 't131059', 't131067');
+```
+
+What a family does not settle. The same name can hold different things:
+千代田区's 公共施設一覧 is close to a property register (public toilets,
+storehouses, staff housing), while other wards list the facilities residents
+use. Some members list facilities outside the publisher's area (sports
+grounds on the 荒川 and 江戸川 banks, a ward's lodge in 軽井沢). Where a family
+member is missing, the publisher may publish the same thing split by kind
+under other names: 台東区 publishes one dataset per kind of facility, and no
+公共施設一覧. Absence from a family is not absence of data.
 
 ## Fields that are derived, and how far to trust them
 

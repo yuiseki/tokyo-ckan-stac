@@ -6,6 +6,7 @@
 data/packages.jsonl
 data/datastore.jsonl
 data/head.jsonl
+data/headers.jsonl
 *.tmp
 
 # The catalog is a build artifact; `make build` rebuilds it from data/.

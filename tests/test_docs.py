@@ -7,7 +7,8 @@ def _stats():
     return {"datasets": 10, "resources": 30, "organisations": 2, "datastore_schemas": 4,
             "basis": collections.Counter({"resource-name": 6, "resource-created": 4}),
             "footprint": collections.Counter({"municipality": 7, "prefecture": 3}),
-            "licenses": collections.Counter({"CC-BY-4.0": 10})}
+            "licenses": collections.Counter({"CC-BY-4.0": 10}),
+            "families": 2, "family_datasets": 5, "national_families": 1, "min_orgs": 5}
 
 
 def test_root_docs_carry_the_counted_numbers():
@@ -30,3 +31,11 @@ def test_node_docs_point_at_the_root():
                                 "links": [{"rel": "item"}, {"rel": "item"}]}, "../../")
     assert "2 item links" in readme
     assert "../../AGENTS.md" in agents
+
+
+def test_family_counts_reach_the_docs():
+    s = _stats()
+    s.update({"families": 43, "family_datasets": 1093, "national_families": 21, "min_orgs": 5})
+    readme, agents = root_docs(s, "https://x.test")
+    assert "43 種類 (1,093 件)" in readme
+    assert "21 of them are" in agents

@@ -6,6 +6,7 @@
     │   └── <org>/collection.json, items/<dataset>.json
     ├── categories/catalog.json    分類別: category, then organisation
     ├── formats/catalog.json       形式別: format label, then organisation
+    ├── families/catalog.json      共通項目別: the same dataset from many publishers
     ├── items.parquet, assets.parquet   (scripts/05_geoparquet.py)
     └── README.md, AGENTS.md beside every catalog.json and collection.json
 
@@ -23,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from tokyo_ckan_stac.docs import node_docs, root_docs  # noqa: E402
+from tokyo_ckan_stac.families import (  # noqa: E402
+    families, family_name, layout_summary, national_number, slug as family_slug)
 from tokyo_ckan_stac.stac import (  # noqa: E402
     CKAN_SITE, build_catalog, build_collection, build_item)
 
@@ -58,6 +61,16 @@ def load_datastore():
     return out, errors
 
 
+MIN_ORGS = 5  # a name shared by this many publishers is a family
+
+
+def load_headers():
+    path = DATA / "headers.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(l) for l in path.open(encoding="utf-8") if l.strip()]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="https://stac.yuiseki.net/tokyo-ckan")
@@ -74,6 +87,14 @@ def main() -> int:
     if out.exists():
         shutil.rmtree(out)
 
+    fam_rows = [{"family": family_name(p["title"], p["organization"]["title"]),
+                 "org": p["organization"]["name"], "name": p["name"]} for p in pkgs]
+    fams = families(fam_rows, MIN_ORGS)
+    fam_of = {r["name"]: r["family"] for r in fam_rows if r["family"] in fams}
+    layouts = layout_summary(load_headers())
+    print(f"{len(fams)} families covering {len(fam_of)} datasets, "
+          f"{sum(v['checked'] for v in layouts.values())} headers read")
+
     by_org = collections.defaultdict(list)
     orgs = {}
     for p in pkgs:
@@ -84,6 +105,19 @@ def main() -> int:
     for oid in sorted(by_org):
         org = orgs[oid]
         items = [build_item(p, areas, base, org["title"], datastore) for p in by_org[oid]]
+        for it in items:
+            fam = fam_of.get(it["id"])
+            if not fam:
+                continue
+            lay = layouts.get(fam, {})
+            it["properties"].update({
+                "tokyo:family": fam,
+                "tokyo:family_size": len(fams[fam]),
+                "tokyo:national_standard": national_number(fam),
+                # None: the header was not read, so nothing is claimed.
+                "tokyo:standard_layout": lay.get("standard", {}).get(it["id"]),
+                "tokyo:family_layout_match": lay.get("match", {}).get(it["id"]),
+            })
         coll = build_collection(org, items, areas, base)
         colls[oid] = coll
         cdir = out / "collections" / oid
@@ -145,6 +179,49 @@ def main() -> int:
             axis, title, desc, f"{base}/{axis}/catalog.json", "../catalog.json", "../catalog.json",
             "東京都オープンデータカタログ", axis_children), "../")
 
+    # 共通項目別: one Catalog per family, its members sorted by publisher.
+    fam_items = collections.defaultdict(list)
+    for it in all_items:
+        if "tokyo:family" in it["properties"]:
+            fam_items[it["properties"]["tokyo:family"]].append(it)
+    fam_children, fam_index = [], []
+    for fam in sorted(fam_items, key=lambda f: (-len(fams[f]), f)):
+        its = sorted(fam_items[fam], key=lambda i: (i["properties"]["tokyo:organization_title"], i["id"]))
+        fs = family_slug(fam)
+        nat = national_number(fam)
+        lay = layouts.get(fam, {})
+        what = (f"デジタル庁 自治体標準オープンデータセット {nat}。" if nat else
+                "国の標準には無い名前。都内の多くの組織が同じ名前で公開している。")
+        if lay:
+            what += (f" 列を確認できた {lay['checked']} 件のうち {lay['matching']} 件が同じ列構成"
+                     f"{'(国の様式)' if lay['dominant_is_standard'] else ''}。")
+        write_node(out / "families" / fs / "catalog.json", build_catalog(
+            f"families-{fs}", fam, f"{len(fams[fam])} の組織が公開している「{fam}」。{what}",
+            f"{base}/families/{fs}/catalog.json", "../../catalog.json", "../catalog.json",
+            "共通項目別 (by shared dataset)", [],
+            [{"href": f"../../collections/{i['collection']}/items/{i['id']}.json",
+              "title": f"{i['properties']['tokyo:organization_title']}: {i['properties']['title']}"}
+             for i in its]), "../../")
+        fam_children.append({"href": f"./{fs}/catalog.json", "title": f"{fam} ({len(fams[fam])})"})
+        fam_index.append({
+            "family": fam, "slug": fs, "national_standard": nat,
+            "organisations": len(fams[fam]), "datasets": len(its),
+            "layout_checked": lay.get("checked", 0), "layout_matching": lay.get("matching", 0),
+            "layout_unchecked": lay.get("unchecked", 0),
+            "dominant_is_standard": lay.get("dominant_is_standard"),
+            "dominant_layout": lay.get("dominant_layout", []),
+            "href": f"./{fs}/catalog.json",
+        })
+    write_node(out / "families" / "catalog.json", build_catalog(
+        "families", "共通項目別 (by shared dataset)",
+        f"{MIN_ORGS} 以上の組織が同じ名前で公開しているデータセット {len(fam_items)} 種類。"
+        "組織をまたいで比べるならここから。",
+        f"{base}/families/catalog.json", "../catalog.json", "../catalog.json",
+        "東京都オープンデータカタログ", fam_children,
+        extra_links=[{"rel": "alternate", "href": "./index.json", "type": "application/json",
+                      "title": "families/index.json: 列構成の一致を含む一覧"}]), "../")
+    write(out / "families" / "index.json", fam_index)
+
     # collections/index.json: every Collection with its description, in one file.
     write(out / "collections" / "index.json", [
         {"id": c["id"], "title": c["title"], "items": c["tokyo:item_count"],
@@ -160,6 +237,10 @@ def main() -> int:
         "basis": collections.Counter(i["properties"]["tokyo:datetime_basis"] for i in all_items),
         "footprint": collections.Counter(i["properties"]["tokyo:footprint_basis"] for i in all_items),
         "licenses": collections.Counter(i["properties"]["license"] for i in all_items),
+        "families": len(fam_items),
+        "family_datasets": sum(len(v) for v in fam_items.values()),
+        "national_families": sum(1 for f in fam_items if national_number(f)),
+        "min_orgs": MIN_ORGS,
     }
     root = build_catalog(
         "tokyo-ckan", "東京都オープンデータカタログ (Tokyo Open Data Catalog)",
@@ -168,7 +249,8 @@ def main() -> int:
         f"{base}/catalog.json", "./catalog.json", None, None,
         [{"href": "./collections/catalog.json", "title": "組織別 (by organisation)"},
          {"href": "./categories/catalog.json", "title": "分類別 (by category)"},
-         {"href": "./formats/catalog.json", "title": "形式別 (by format)"}],
+         {"href": "./formats/catalog.json", "title": "形式別 (by format)"},
+         {"href": "./families/catalog.json", "title": "共通項目別 (by shared dataset)"}],
         extra_links=[
             {"rel": "via", "href": CKAN_SITE, "type": "text/html", "title": "東京都オープンデータカタログ"},
             {"rel": "alternate", "href": "./collections/index.json", "type": "application/json",

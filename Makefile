@@ -1,11 +1,12 @@
 PY := PYTHONPATH=src python3
 
-.PHONY: help packages footprints datastore build validate test serve start install-catalog clean
+.PHONY: help packages footprints datastore headers build validate test serve start install-catalog clean
 
 help:
 	@echo "make packages    every dataset record from the CKAN API (under a minute)"
 	@echo "make footprints  municipality rectangles from N03 (one 13 MB download)"
 	@echo "make datastore   column names of every DataStore resource (hours; resumable)"
+	@echo "make headers     header row of every family member's first CSV (an hour; resumable)"
 	@echo "make build       data/ -> catalog/, plus items.parquet and assets.parquet (offline)"
 	@echo "                 BASE_URL=... sets the absolute self links"
 	@echo "make validate    check catalog/"
@@ -22,6 +23,9 @@ footprints:
 
 datastore:
 	$(PY) scripts/03_datastore_fields.py
+
+headers:
+	$(PY) scripts/09_family_headers.py
 
 BASE_URL ?= https://stac.yuiseki.net/tokyo-ckan
 
