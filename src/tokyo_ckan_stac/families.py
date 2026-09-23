@@ -32,7 +32,11 @@ NATIONAL = {
     "赤ちゃんの駅一覧": "29", "ゴミ集積場所一覧": "30", "観光ポイント一覧": "31",
 }
 
-STANDARD_HEAD = ("全国地方公共団体コード", "ID", "地方公共団体名")
+# Names used in Tokyo that differ from the definition books by a character,
+# mapped only where the header proves it: the 9 ゴミ集積所一覧 and the 5 観光ポイント
+# datasets use the データモデル型 columns of 30 and 31 (ゴミ集積場所_全国地方公共団体コード,
+# 観光ポイント_全国地方公共団体コード, ...).
+ALIASES = {"ゴミ集積所一覧": "30", "観光ポイント": "31"}
 
 
 def family_name(title: str, org_title: str) -> str:
@@ -52,7 +56,7 @@ def family_name(title: str, org_title: str) -> str:
 
 
 def national_number(name: str) -> Optional[str]:
-    return NATIONAL.get(name)
+    return NATIONAL.get(name) or ALIASES.get(name)
 
 
 def header_fingerprint(header: Iterable[str]) -> str:
@@ -62,10 +66,6 @@ def header_fingerprint(header: Iterable[str]) -> str:
         cols.pop()
     return "\t".join(cols)
 
-
-def uses_standard_layout(header: Iterable[str]) -> bool:
-    cols = header_fingerprint(header).split("\t")
-    return tuple(cols[:3]) == STANDARD_HEAD
 
 
 def families(rows: Iterable[Dict], min_orgs: int) -> Dict[str, set]:
@@ -106,11 +106,43 @@ def layout_summary(headers: Iterable[Dict]) -> Dict[str, Dict]:
         dominant, n = counts.most_common(1)[0] if counts else ("", 0)
         out[fam] = {
             "dominant_layout": dominant.split("\t") if dominant else [],
-            "dominant_is_standard": bool(dominant) and uses_standard_layout(dominant.split("\t")),
             "checked": len(members),
             "matching": n,
             "unchecked": unchecked.get(fam, 0),
             "match": {d: fp == dominant for d, fp in members.items()},
-            "standard": {d: uses_standard_layout(fp.split("\t")) for d, fp in members.items()},
         }
     return out
+
+
+def decode_head(blob: bytes) -> str:
+    """The first bytes of a file said to be a CSV, as text.
+
+    Seen in this catalog: UTF-8 with and without BOM, Shift_JIS, UTF-16 with
+    BOM (新宿区, Excel's Unicode text export), and zips named .csv. The cut at
+    a fixed length can split the last character, so up to three trailing
+    bytes are dropped before an encoding is given up on.
+    """
+    if blob[:2] == b"PK":
+        raise ValueError("a zip archive, not a CSV")
+    if blob[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        body = blob[: len(blob) - (len(blob) % 2)]
+        return body.decode("utf-16", errors="ignore")
+    for enc in ("utf-8-sig", "cp932"):
+        for cut in range(4):
+            try:
+                return blob[: len(blob) - cut].decode(enc)
+            except UnicodeDecodeError:
+                continue
+    raise ValueError("neither UTF-8, Shift_JIS nor UTF-16")
+
+
+def split_header(text: str):
+    """The first non-empty row. Tab-separated when the row has more tabs than commas."""
+    import csv
+    import io
+    for line in text.splitlines():
+        if not line.strip(" ,\t﻿"):
+            continue
+        delim = "\t" if line.count("\t") > line.count(",") else ","
+        return next(csv.reader(io.StringIO(line), delimiter=delim))
+    raise ValueError("no non-empty row in the first 8 KiB")

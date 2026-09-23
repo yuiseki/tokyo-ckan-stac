@@ -119,16 +119,23 @@ need the same kind of list from each publisher. {stats['families']} names are us
 {stats['min_orgs']} or more organisations; these are families, and each Item in one carries
 `tokyo:family`. {stats['national_families']} of them are デジタル庁's 自治体標準オープンデータセット
 (`tokyo:national_standard` is the number in its definition books, 01 公共施設一覧
-and so on). The others, such as スポーツ施設一覧 and 公立図書館情報, were
+and so on; ゴミ集積所一覧 and 観光ポイント are one character off the national names, and
+their columns show they are 30 and 31). The others, such as スポーツ施設一覧 and 公立図書館情報, were
 registered across Tokyo in batches without a national definition.
 
 A shared name is a claim; the columns are the evidence. The first row of each
 member's first CSV was read, and:
 
 - `tokyo:family_layout_match` is true when the header equals the family's
-  most common one, false when it differs, null when it could not be read.
-- `tokyo:standard_layout` is true when the header starts with the national
-  layout (全国地方公共団体コード, ID, 地方公共団体名).
+  most common one, false when it differs, null when it could not be read
+  (no CSV, a dead link, or a zip named .csv).
+
+The match is exact, so it is strict. National families have more than one
+layout in use because the definition books have versions (a later one adds
+法人番号 as the second column) and a second, データモデル型 form whose columns
+carry a prefix (投票所_全国地方公共団体コード). A false here often means "an
+older or newer layout of the same thing", not "a different thing": compare
+the headers before discarding a member.
 
 `{base}/families/index.json` has, per family, how many headers were read and
 how many match. Read it before comparing: a family where half the members

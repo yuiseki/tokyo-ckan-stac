@@ -115,7 +115,6 @@ def main() -> int:
                 "tokyo:family_size": len(fams[fam]),
                 "tokyo:national_standard": national_number(fam),
                 # None: the header was not read, so nothing is claimed.
-                "tokyo:standard_layout": lay.get("standard", {}).get(it["id"]),
                 "tokyo:family_layout_match": lay.get("match", {}).get(it["id"]),
             })
         coll = build_collection(org, items, areas, base)
@@ -193,8 +192,7 @@ def main() -> int:
         what = (f"デジタル庁 自治体標準オープンデータセット {nat}。" if nat else
                 "国の標準には無い名前。都内の多くの組織が同じ名前で公開している。")
         if lay:
-            what += (f" 列を確認できた {lay['checked']} 件のうち {lay['matching']} 件が同じ列構成"
-                     f"{'(国の様式)' if lay['dominant_is_standard'] else ''}。")
+            what += f" 列を確認できた {lay['checked']} 件のうち {lay['matching']} 件が同じ列構成。"
         write_node(out / "families" / fs / "catalog.json", build_catalog(
             f"families-{fs}", fam, f"{len(fams[fam])} の組織が公開している「{fam}」。{what}",
             f"{base}/families/{fs}/catalog.json", "../../catalog.json", "../catalog.json",
@@ -208,7 +206,6 @@ def main() -> int:
             "organisations": len(fams[fam]), "datasets": len(its),
             "layout_checked": lay.get("checked", 0), "layout_matching": lay.get("matching", 0),
             "layout_unchecked": lay.get("unchecked", 0),
-            "dominant_is_standard": lay.get("dominant_is_standard"),
             "dominant_layout": lay.get("dominant_layout", []),
             "href": f"./{fs}/catalog.json",
         })

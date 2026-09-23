@@ -9,8 +9,6 @@ that ignores Range sends the whole file, and the read stops at 8 KiB anyway.
 Resumable. Two workers with a pause, as for the DataStore sweep.
 """
 import argparse
-import csv
-import io
 import json
 import random
 import sys
@@ -23,24 +21,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from tokyo_ckan_stac.families import families, family_name  # noqa: E402
+from tokyo_ckan_stac.families import decode_head, families, family_name, split_header  # noqa: E402
 from tokyo_ckan_stac.formats import format_label  # noqa: E402
 from tokyo_ckan_stac.http import UA  # noqa: E402
 
 OUT = ROOT / "data" / "headers.jsonl"
 MIN_ORGS = 5
-
-
-def decode(blob: bytes) -> str:
-    """UTF-8 or Shift_JIS. The 8 KiB cut can split the last character, so up
-    to three trailing bytes are dropped before giving up on an encoding."""
-    for enc in ("utf-8-sig", "cp932"):
-        for cut in range(4):
-            try:
-                return blob[: len(blob) - cut].decode(enc)
-            except UnicodeDecodeError:
-                continue
-    raise ValueError("neither UTF-8 nor Shift_JIS")
 
 
 def first_row(url: str):
@@ -51,11 +37,7 @@ def first_row(url: str):
         ctype = r.headers.get("Content-Type", "")
     if blob.lstrip()[:15].lower().startswith((b"<!doctype", b"<html")):
         raise ValueError(f"HTML instead of CSV ({ctype})")
-    text = decode(blob)
-    for row in csv.reader(io.StringIO(text)):
-        if any(c.strip() for c in row):
-            return status, row
-    raise ValueError("no non-empty row in the first 8 KiB")
+    return status, split_header(decode_head(blob))
 
 
 def main() -> int:
